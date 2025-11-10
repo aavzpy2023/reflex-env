@@ -1,0 +1,26 @@
+# 🐍 Core & Framework
+reflex
+python-dotenv
+
+# 🗄️ Database
+psycopg2-binary
+
+# 📊 Visualization
+matplotlib
+seaborn
+
+# 🧪 Testing & Quality
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+httpx
+ruff
+black
+mypy
+
+# 🔧 Utilities & Security
+python-multipart
+python-jose
+passlib[bcrypt]
+reflex==0.8.18

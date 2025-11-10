@@ -1,0 +1,539 @@
+--- Contenido del Proyecto Exportado el 2025-11-10 13:29:31 ---
+
+
+// --- ./.env ---
+
+# General
+ENVIRONMENT=development
+DEBUG=True
+LOG_LEVEL=DEBUG
+SECRET_KEY=super-secret-dev-key
+
+# PostgreSQL
+POSTGRES_DB=app_db_dev
+POSTGRES_USER=app_user
+POSTGRES_PASSWORD=app_password
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+
+# Reflex App
+APP_HOST=0.0.0.0
+APP_PORT=3000
+API_PORT=8000
+API_URL=http://localhost:8000
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+
+# Nginx
+NGINX_PORT=80
+
+// --- ./README.md ---
+
+# Plantilla de Proyecto de Reflex + Docker
+
+Esta es una plantilla robusta y escalable para desarrollar aplicaciones web con [Reflex](https://reflex.dev/), totalmente contenerizada con Docker y optimizada para un flujo de trabajo de desarrollo profesional usando VS Code Dev Containers.
+
+## 🎯 Características Principales
+
+- **Fullstack en Python**: Frontend y backend con un único lenguaje.
+- **Entorno Contenerizado**: Configuración con Docker y Docker Compose para desarrollo y testing.
+- **Desarrollo Remoto**: Optimizado para GitHub Codespaces y VS Code Dev Containers.
+- **Extensiones Pre-instaladas**: La imagen Docker incluye las extensiones de VS Code para una experiencia lista para usar, incluso sin conexión.
+- **Testing Profesional**: Entorno de testing aislado con `pytest`.
+- **Automatización**: `Makefile` con comandos para simplificar las operaciones comunes.
+- **Configuración por Entorno**: Gestión de la configuración para desarrollo y testing a través de ficheros `.env`.
+- **Arquitectura Modular**: Estructura de ficheros organizada por funcionalidad.
+
+## 🚀 Inicio Rápido
+
+### Prerrequisitos
+
+- Docker y Docker Compose
+- Visual Studio Code con la extensión [Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+
+### Pasos
+
+1.  **Clonar el repositorio:**
+    ```bash
+    git clone <URL_DEL_REPOSITORIO>
+    cd reflex-app
+    ```
+
+2.  **Crear fichero `.env`:**
+    No es necesario crear este fichero manualmente si no desea sobreescribir los valores por defecto. La configuración base se cargará automáticamente.
+
+3.  **Abrir en Dev Container:**
+    - Abra el proyecto en VS Code.
+    - Presione `F1` y seleccione `Dev Containers: Reopen in Container`.
+    - VS Code construirá la imagen Docker (la primera vez puede tardar) e iniciará el entorno.
+
+### ✅ Verificación del Entorno
+
+Una vez que el contenedor esté en funcionamiento (puede tomar 30-60 segundos después de que se abra la ventana de VS Code), verifique que la aplicación está corriendo:
+
+1.  **Abra su navegador web.**
+2.  **Navegue a [http://localhost](http://localhost).**
+3.  **Deberá ver una página de bienvenida** con el título "Software Synergy Solutions" que confirma que todos los servicios del stack están operativos.
+
+## 🛠️ Uso del `Makefile`
+
+El `Makefile` proporciona un conjunto de comandos para gestionar el ciclo de vida del proyecto.
+
+- `make up`: Inicia todos los servicios.
+- `make down`: Detiene todos los servicios.
+- `make build`: Reconstruye las imágenes Docker.
+- `make logs`: Muestra los logs de la aplicación.
+- `make shell`: Accede a una terminal dentro del contenedor de la aplicación.
+- `make test`: Ejecuta la suite de tests.
+- `make clean`: Limpia completamente el entorno Docker (contenedores, volúmenes, redes).
+- `make init-db`: Ejecuta el script para crear las tablas en la base de datos.
+
+// --- ./docker-compose.yml ---
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  reflex_app:
+    build:
+      context: ./reflex_app
+      dockerfile: Dockerfile
+    container_name: reflex_app
+    volumes:
+      - ./reflex_app:/app
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT}:${APP_PORT}"
+      - "${API_PORT}:${API_PORT}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    command: reflex run --frontend-port ${APP_PORT} --backend-port ${API_PORT}
+
+  nginx:
+    build: ./nginx
+    container_name: nginx
+    ports:
+      - "${NGINX_PORT}:80"
+    depends_on:
+      - reflex_app
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+
+// --- ./nginx/Dockerfile ---
+
+FROM nginx:1.25-alpine
+
+# Eliminar configuración por defecto para evitar conflictos
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Copiar nuestra configuración personalizada
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+// --- ./nginx/nginx.conf ---
+
+server {
+    listen 80;
+    server_name localhost;
+
+    # Proxy para el frontend de Reflex (UI)
+    location / {
+        proxy_pass http://reflex_app:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Proxy para el backend de Reflex (Websockets)
+    location /_event {
+        proxy_pass http://reflex_app:8000/_event;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+
+// --- ./reflex_app/.web/jsconfig.json ---
+
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "$/*": ["*"],
+      "@/*": ["public/*"]
+    }
+  }
+}
+
+
+// --- ./reflex_app/.web/package.json ---
+
+{"name": "reflex", "type": "module", "scripts": {"dev": "react-router dev --host", "export": "react-router build", "prod": "sirv ./build/client --single 404.html --host"}, "dependencies": {"json5": "2.2.3", "react-router": "7.9.4", "react-router-dom": "7.9.4", "@react-router/node": "7.9.4", "sirv-cli": "3.0.1", "react": "19.2.0", "react-helmet": "6.1.0", "react-dom": "19.2.0", "isbot": "5.1.31", "socket.io-client": "4.8.1", "universal-cookie": "7.2.2"}, "devDependencies": {"@emotion/react": "11.14.0", "autoprefixer": "10.4.21", "postcss": "8.5.6", "postcss-import": "16.1.1", "@react-router/dev": "7.9.4", "@react-router/fs-routes": "7.9.4", "vite": "npm:rolldown-vite@7.1.18"}, "overrides": {"react-is": "19.2.0", "cookie": "1.0.2", "vite": "npm:rolldown-vite@7.1.18"}}
+
+// --- ./reflex_app/.web/reflex.json ---
+
+{"version": "0.8.18", "project_hash": 84838428963482448105744953026603322836, "last_version_check_datetime": "2025-11-10 13:25:07.000969"}
+
+// --- ./reflex_app/Dockerfile ---
+
+# ./app/Dockerfile
+# ------------------------------------------------------------------------------------
+# ETAPA 1: EL CONSTRUCTOR DE ARTEFACTOS
+# ------------------------------------------------------------------------------------
+    FROM debian:bookworm-slim as builder
+
+    ARG INSTALL_DIR="/root/.vscode-server"
+    RUN mkdir -p "${INSTALL_DIR}"
+    COPY assets/vscode-server-linux-x64.tar.gz /tmp/vscode-server.tar.gz
+    RUN tar -xzf /tmp/vscode-server.tar.gz -C "${INSTALL_DIR}" --strip-components 1
+    RUN rm /tmp/vscode-server.tar.gz
+    
+    
+    # ------------------------------------------------------------------------------------
+    # ETAPA 2: LA IMAGEN DE PRODUCCIÓN FINAL
+    # ------------------------------------------------------------------------------------
+    FROM python:3.13-slim-bookworm
+    
+    ENV PYTHONDONTWRITEBYTECODE 1
+    ENV PYTHONUNBUFFERED 1
+    WORKDIR /app
+    
+    # ------------------------------------------------------------------------------------
+    # INSTALACIÓN ATÓMICA DE DEPENDENCIAS DE GRADO MILITAR
+    # ------------------------------------------------------------------------------------
+    RUN apt-get update && \
+        apt-get install -y --no-install-recommends \
+        build-essential curl libpq-dev git unzip && \
+        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+        apt-get install -y --no-install-recommends nodejs && \
+        apt-get clean && \
+        rm -rf /var/lib/apt/lists/*
+    
+    # Instalar Bun para la gestión del frontend de Reflex
+    RUN curl -fsSL https://bun.sh/install | bash
+    
+    # ------------------------------------------------------------------------------------
+    # CONFIGURACIÓN DEL ENTORNO DE EJECUCIÓN FINAL
+    # ------------------------------------------------------------------------------------
+    ENV PATH="/root/.vscode-server/bin:/root/.bun/bin:${PATH}"
+    
+    # ------------------------------------------------------------------------------------
+    # ARQUITECTURA DE GRADO MILITAR: Copia y configuración de artefactos
+    # ------------------------------------------------------------------------------------
+    COPY --from=builder /root/.vscode-server /root/.vscode-server
+    
+    # CORRECCIÓN FINAL Y DEFINITIVA: Recrear el alias esperado.
+    # El binario real es 'code-server'. Creamos el enlace simbólico 'code' para
+    # restaurar la convención y la compatibilidad con los scripts de instalación.
+    RUN ln -s /root/.vscode-server/bin/code-server /root/.vscode-server/bin/code
+    
+    # Define las extensiones a instalar usando sus IDs oficiales
+    ARG VSCODE_EXTENSIONS=" \
+        ms-python.python \
+        ms-python.vscode-pylance \
+        charliermarsh.ruff \
+        ms-python.black-formatter \
+        eamodio.gitlens \
+        ms-azuretools.vscode-docker \
+        rangav.vscode-thunder-client \
+        ckolkman.vscode-postgres \
+        mtxr.sqltools \
+        littlefoxteam.vscode-python-test-adapter \
+        ms-vscode.test-adapter-converter \
+        ms-vscode.makefile-tools \
+        github.copilot \
+        ms-vscode.vscode-file-utils \
+        christian-kohler.path-intellense \
+        usernamehw.errorlens"
+    
+    # Itera e instala cada extensión, invocando el alias que acabamos de crear.
+    RUN for ext in ${VSCODE_EXTENSIONS}; do \
+            /root/.vscode-server/bin/code --install-extension ${ext} --force; \
+        done
+    
+    # Copiar e instalar requerimientos de Python
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    
+    # Copiar el resto de la aplicación
+    COPY . .
+
+// --- ./reflex_app/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/api/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/api/users.py ---
+
+
+
+// --- ./reflex_app/reflex_app/components/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/components/layout.py ---
+
+
+
+// --- ./reflex_app/reflex_app/config/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/config/database.py ---
+
+import os
+
+import sqlmodel
+from dotenv import load_dotenv
+
+load_dotenv()
+
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable not set")
+
+engine = sqlmodel.create_engine(DATABASE_URL)
+
+
+def get_session():
+    with sqlmodel.Session(engine) as session:
+        yield session
+
+
+// --- ./reflex_app/reflex_app/config/settings.py ---
+
+
+
+// --- ./reflex_app/reflex_app/models/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/models/schemas.py ---
+
+import datetime
+from typing import Optional
+
+import sqlmodel
+
+
+class User(sqlmodel.SQLModel, table=True):
+    id: Optional[int] = sqlmodel.Field(default=None, primary_key=True)
+    username: str = sqlmodel.Field(unique=True, index=True)
+    password_hash: str
+    created_at: datetime.datetime = sqlmodel.Field(
+        default_factory=datetime.datetime.utcnow, nullable=False
+    )
+
+
+// --- ./reflex_app/reflex_app/pages/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/pages/home.py ---
+
+import reflex as rx
+
+from ..state.auth_state import AuthState
+
+
+def home_page() -> rx.Component:
+    """La página de bienvenida, visible solo para usuarios autenticados."""
+    return rx.fragment(
+        rx.cond(
+            AuthState.is_logged_in,
+            rx.center(
+                rx.vstack(
+                    rx.heading(f"Bienvenido, {AuthState.username}!", size="8"),
+                    rx.button(
+                        "Cerrar Sesión",
+                        on_click=AuthState.logout,
+                        margin_top="1em",
+                        size="3",
+                    ),
+                    align="center",
+                ),
+                height="100vh",
+            ),
+        )
+    )
+
+
+// --- ./reflex_app/reflex_app/pages/login.py ---
+
+import reflex as rx
+
+from ..state.auth_state import AuthState
+
+
+def login_page() -> rx.Component:
+    """La página de inicio de sesión."""
+    return rx.center(
+        rx.vstack(
+            rx.heading("Iniciar Sesión", size="8"),
+            rx.input(placeholder="Usuario", on_blur=AuthState.set_username, size="3"),
+            rx.input(
+                placeholder="Contraseña",
+                type="password",
+                on_blur=AuthState.set_password,
+                size="3",
+            ),
+            rx.button("Entrar", on_click=AuthState.login, size="3"),
+            rx.cond(
+                AuthState.error_message != "",
+                rx.text(AuthState.error_message, color="red", margin_top="1em"),
+            ),
+            spacing="4",
+            align="center",
+        ),
+        height="100vh",
+    )
+
+
+// --- ./reflex_app/reflex_app/pages/profile.py ---
+
+
+
+// --- ./reflex_app/reflex_app/reflex_app.py ---
+
+import reflex as rx
+
+from .pages.home import home_page
+from .pages.login import login_page
+from .state.auth_state import AuthState
+
+# Crear la instancia de la aplicación
+app = rx.App(state=AuthState)
+
+# Añadir las páginas y definir las rutas
+app.add_page(login_page, route="/")
+app.add_page(home_page, route="/home", on_load=AuthState.check_login_status)
+
+// --- ./reflex_app/reflex_app/services/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/services/user_service.py ---
+
+
+
+// --- ./reflex_app/reflex_app/state/__init__.py ---
+
+
+
+// --- ./reflex_app/reflex_app/state/auth_state.py ---
+
+import reflex as rx
+import sqlmodel
+
+from ..config.database import get_session
+from ..models.schemas import User
+
+
+class AuthState(rx.State):
+    """Estado para gestionar la autenticación del usuario."""
+
+    username: str = ""
+    password: str = ""
+    error_message: str = ""
+    is_logged_in: bool = False
+
+    def login(self):
+        """Maneja el evento de inicio de sesión."""
+        if not self.username or not self.password:
+            self.error_message = "Usuario y contraseña son requeridos."
+            return
+
+        with next(get_session()) as session:
+            user = session.exec(
+                sqlmodel.select(User).where(User.username == self.username)
+            ).first()
+
+            # ADVERTENCIA: Comparación de texto plano. Usar hashing en producción.
+            if user and user.password_hash == self.password:
+                self.error_message = ""
+                self.is_logged_in = True
+                return rx.redirect("/home")
+            else:
+                self.error_message = "Credenciales inválidas."
+                self.is_logged_in = False
+
+    def logout(self):
+        """Maneja el evento de cierre de sesión."""
+        self.reset()
+        return rx.redirect("/")
+
+    def check_login_status(self):
+        """Verifica si el usuario está logueado, redirige si no lo está."""
+        if not self.is_logged_in:
+            return rx.redirect("/")
+
+
+// --- ./reflex_app/requirements.txt ---
+
+# 🐍 Core & Framework
+reflex
+python-dotenv
+
+# 🗄️ Database
+psycopg2-binary
+
+# 📊 Visualization
+matplotlib
+seaborn
+
+# 🧪 Testing & Quality
+pytest
+pytest-asyncio
+pytest-cov
+pytest-mock
+httpx
+ruff
+black
+mypy
+
+# 🔧 Utilities & Security
+python-multipart
+python-jose
+passlib[bcrypt]
+reflex==0.8.18
+
+// --- ./reflex_app/rxconfig.py ---
+
+import reflex as rx
+
+config = rx.Config(
+    app_name="reflex_app",
+)

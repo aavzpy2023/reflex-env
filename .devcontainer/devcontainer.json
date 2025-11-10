@@ -1,0 +1,36 @@
+{
+    "name": "Reflex App Dev Environment",
+    "dockerComposeFile": [
+        "../docker-compose.yml"
+    ],
+    "service": "reflex_app",
+    "workspaceFolder": "/app",
+    // Esta sección gestiona las extensiones de VS Code de forma automática y robusta.
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-python.black-formatter",
+                "eamodio.gitlens",
+                "ms-azuretools.vscode-docker",
+                "rangav.vscode-thunder-client",
+                "ckolkman.vscode-postgres",
+                "mtxr.sqltools",
+                "littlefoxteam.vscode-python-test-adapter",
+                "ms-vscode.test-adapter-converter",
+                "ms-vscode.makefile-tools",
+                "github.copilot",
+                "ms-vscode.vscode-file-utils",
+                "christian-kohler.path-intellense",
+                "usernamehw.errorlens"
+            ]
+        }
+    },
+    // Indica a VS Code que ejecute el comando 'reflex init' después de crear el contenedor
+    // para asegurar que todo esté configurado, si fuera necesario.
+    "postCreateCommand": "reflex init",
+    // Conecta VS Code como usuario root dentro del contenedor para evitar problemas de permisos.
+    "remoteUser": "root"
+}
