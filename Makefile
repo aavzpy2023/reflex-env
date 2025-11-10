@@ -20,6 +20,11 @@ help:
 	@echo "  test         - 🧪 Ejecuta la suite de tests en un entorno aislado."
 	@echo "  init-db      - 💾 Ejecuta el script de inicialización de la base de datos."
 
+
+ps:
+	@echo "Listando contenedores..."
+	docker-compose ps
+
 up:
 	@echo "🚀 Iniciando entorno de desarrollo..."
 	docker-compose up -d
@@ -32,7 +37,7 @@ restart: down up
 
 build:
 	@echo "🛠️ Construyendo imágenes..."
-	docker-compose build
+	docker-compose up -d --build
 
 logs:
 	@echo "📜 Siguiendo logs de la aplicación..."

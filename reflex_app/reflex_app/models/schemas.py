@@ -11,3 +11,5 @@ class User(sqlmodel.SQLModel, table=True):
     created_at: datetime.datetime = sqlmodel.Field(
         default_factory=datetime.datetime.utcnow, nullable=False
     )
+
+    __table_args__ = {"extend_existing": True}

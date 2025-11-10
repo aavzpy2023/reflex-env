@@ -45,11 +45,9 @@ RUN for ext in ${VSCODE_EXTENSIONS}; do \
         code --install-extension ${ext} --force; \
     done
 
-# ------------------------------------------------------------------------------------
-# INSTALACIÓN DE DEPENDENCIAS DE PYTHON
-# ------------------------------------------------------------------------------------
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
 # Copiar el resto de la aplicación
 COPY . .
+
+# Instalar las dependencias de Python que ahora están en /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt

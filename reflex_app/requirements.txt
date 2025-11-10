@@ -1,6 +1,7 @@
 # 🐍 Core & Framework
-reflex
+reflex==0.8.18
 python-dotenv
+sqlmodel
 
 # 🗄️ Database
 psycopg2-binary
@@ -22,5 +23,5 @@ mypy
 # 🔧 Utilities & Security
 python-multipart
 python-jose
-passlib[bcrypt]
-reflex==0.8.18
+passlib==1.7.4
+bcrypt==4.0.1

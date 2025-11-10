@@ -23,16 +23,14 @@ services:
       context: ./reflex_app
       dockerfile: Dockerfile
     container_name: reflex_app
-    volumes:
-      - ./reflex_app:/app
     working_dir: /app
     environment:
-      - PYTHONPATH=/
+      - ./reflex_app:/app
     env_file:
       - .env
     ports:
-      - "${APP_PORT}:${APP_PORT}"
-      - "${API_PORT}:${API_PORT}"
+      - "${REFLEX_FRONTEND_PORT}:${REFLEX_FRONTEND_PORT}"
+      - "${REFLEX_BACKEND_PORT}:${REFLEX_BACKEND_PORT}"
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,7 +38,9 @@ services:
     command: reflex run --backend-host 0.0.0.0
 
   nginx:
-    build: ./nginx
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
     container_name: nginx
     ports:
       - "${NGINX_PORT}:80"
