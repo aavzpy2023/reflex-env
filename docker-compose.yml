@@ -24,8 +24,11 @@ services:
       dockerfile: Dockerfile
     container_name: reflex_app
     working_dir: /app
-    environment:
+    volumes:
       - ./reflex_app:/app
+    environment:
+      - HOST=0.0.0.0
+      - REFLEX_CHECK_LATEST_VERSION=False
     env_file:
       - .env
     ports:

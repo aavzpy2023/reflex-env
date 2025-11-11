@@ -1,31 +1,50 @@
+# --- ETAPA 1: La Fábrica Autónoma de Cache (Builder) ---
+# Esta etapa sigue una secuencia causal estricta para garantizar un build reproducible.
+FROM python:3.13-slim-bookworm as builder
+
+WORKDIR /app
+
+# 1. Instalar dependencias del sistema y de JS.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl unzip nodejs npm && \
+    apt-get clean
+RUN npm install -g bun
+
+# 2. Instalar dependencias de Python. Esto es necesario para tener el comando 'reflex'.
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 3. Copiar el código fuente de la aplicación.
+COPY . .
+
+# 4. EL PASO CRÍTICO: Ejecutar 'reflex init'.
+# Esto genera el directorio '/app/.web' y el 'package.json' necesario.
+RUN reflex init
+
+# 5. POBLAR EL CACHE: Ahora que '/app/.web/package.json' existe,
+# este comando tendrá éxito y poblará el cache de Bun.
+RUN bun install --cwd .web
+
+# --- ETAPA 2: La Imagen de Desarrollo Final ---
+# Esta etapa es idéntica a la anterior, pero ahora hereda un cache válido.
 FROM python:3.13-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE 1
 ENV PYTHONUNBUFFERED 1
 WORKDIR /app
 
-# ------------------------------------------------------------------------------------
-# INSTALACIÓN DE DEPENDENCIAS DEL SISTEMA Y JAVASCRIPT RUNTIMES
-# ------------------------------------------------------------------------------------
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     build-essential curl libpq-dev git unzip nodejs npm && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# --- PASO DE VERIFICACIÓN DE GRADO MILITAR (NPM) ---
-RUN npm --version
-
-# Instalar Bun
 RUN curl -fsSL https://bun.sh/install | bash
 ENV PATH="/root/.bun/bin:${PATH}"
 
-# --- PASO DE VERIFICACIÓN DE GRADO MILITAR (BUN) ---
-RUN bun --version
+# Copiar el cache de Bun pre-poblado desde la etapa 'builder'.
+COPY --from=builder /root/.bun /root/.bun
 
-# ------------------------------------------------------------------------------------
-# INSTALACIÓN DEL VS CODE SERVER Y EXTENSIONES
-# ------------------------------------------------------------------------------------
 ARG INSTALL_DIR="/root/.vscode-server"
 RUN mkdir -p "${INSTALL_DIR}"
 RUN curl -L "https://update.code.visualstudio.com/latest/server-linux-x64/stable" -o /tmp/vscode-server.tar.gz && \
@@ -39,8 +58,5 @@ RUN for ext in ${VSCODE_EXTENSIONS}; do \
         code --install-extension ${ext} --force; \
     done
 
-# ------------------------------------------------------------------------------------
-# INSTALACIÓN DE CÓDIGO FUENTE Y DEPENDENCIAS DE PYTHON
-# ------------------------------------------------------------------------------------
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
