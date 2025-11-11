@@ -5,7 +5,24 @@
     ],
     "service": "reflex_app",
     "workspaceFolder": "/app",
-    // Esta sección gestiona las extensiones de VS Code de forma automática y robusta.
+
+    // REFACTORIZACIÓN CRÍTICA: Se elimina 'runArgs' y se reemplaza con 'remoteEnv'.
+    // Esta es la forma canónica de hacer que las variables de .env estén disponibles
+    // para el proceso de 'docker-compose config' en GitHub Codespaces.
+    // Resuelve el error "variable is not set".
+    "remoteEnv": {
+        "POSTGRES_DB": "${localEnv:POSTGRES_DB}",
+        "POSTGRES_USER": "${localEnv:POSTGRES_USER}",
+        "POSTGRES_PASSWORD": "${localEnv:POSTGRES_PASSWORD}",
+        "POSTGRES_HOST": "${localEnv:POSTGRES_HOST}",
+        "POSTGRES_PORT": "${localEnv:POSTGRES_PORT}",
+        "REFLEX_DB_URL": "${localEnv:REFLEX_DB_URL}",
+        "REFLEX_FRONTEND_PORT": "${localEnv:REFLEX_FRONTEND_PORT}",
+        "REFLEX_BACKEND_PORT": "${localEnv:REFLEX_BACKEND_PORT}",
+        "NGINX_PORT": "${localEnv:NGINX_PORT}",
+        "HOST": "0.0.0.0"
+    },
+
     "customizations": {
         "vscode": {
             "extensions": [
@@ -28,9 +45,6 @@
             ]
         }
     },
-    // Indica a VS Code que ejecute el comando 'reflex init' después de crear el contenedor
-    // para asegurar que todo esté configurado, si fuera necesario.
     "postCreateCommand": "reflex init",
-    // Conecta VS Code como usuario root dentro del contenedor para evitar problemas de permisos.
     "remoteUser": "root"
 }
